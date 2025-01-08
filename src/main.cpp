@@ -225,23 +225,22 @@ void drawCube()
 }
 
 // Функция для рисования пирамиды
-// Функция для рисования пирамиды
 void drawPyramid()
 {
     glPushMatrix();
     glColor3f(0.2f, 0.8f, 0.4f); // Цвет пирамиды
     glTranslatef(2.0f, 0.5f, 2.0f);
-
+    glBegin(GL_TRIANGLES);
     // Основание
-    glBegin(GL_QUADS);
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, 0.5f);
+
+    glVertex3f(-0.5f, 0.0f, -0.5f);
+    glVertex3f(0.5f, 0.0f, 0.5f);
     glVertex3f(-0.5f, 0.0f, 0.5f);
-    glEnd();
 
     // Боковые стороны
-    glBegin(GL_TRIANGLES);
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, -0.5f);
     glVertex3f(0.0f, 1.0f, 0.0f);
@@ -258,7 +257,6 @@ void drawPyramid()
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.0f, 1.0f, 0.0f);
     glEnd();
-
     glPopMatrix();
 }
 

@@ -2,11 +2,30 @@
 #include <GL/glut.h>
 #include <cmath>
 #include <iostream>
+#include <vector>
+#include <tuple>
+
+class ZBuffer
+{
+private:
+    int width;
+    int height;
+    std::vector<std::vector<float>> buffer;                                // Глубинный буфер
+    std::vector<std::vector<std::tuple<float, float, float>>> framebuffer; // Цветовой буфер
+
+public:
+    ZBuffer(int width, int height);
+    void clear();
+    void setPixel(int x, int y, float depth, std::tuple<float, float, float> color);
+    const std::vector<std::vector<std::tuple<float, float, float>>> &getFrameBuffer() const;
+};
 
 // Параметры сцены
 float lightPos[4] = {2.0f, 4.0f, 2.0f, 1.0f}; // Позиция источника света
 float lightAngleY = 45.0f;                    // Угол движения света по оси Y
 float cameraAngle = 0.0f;
+const int screenWidth = 1500, screenHeight = 1500;
+ZBuffer zbuffer(screenWidth, screenHeight);
 
 // Прототипы функций
 void display();
@@ -20,9 +39,37 @@ void updateCamera();
 void keyboard(unsigned char key, int x, int y);
 void updateLight();
 void drawSceneWithShadows();
+void renderFromZBuffer();
 
-// Z-буфер
-const int screenWidth = 1500, screenHeight = 1500;
+// Реализация методов
+ZBuffer::ZBuffer(int width, int height) : width(width), height(height)
+{
+    buffer = std::vector<std::vector<float>>(height, std::vector<float>(width, std::numeric_limits<float>::infinity()));
+    framebuffer = std::vector<std::vector<std::tuple<float, float, float>>>(height, std::vector<std::tuple<float, float, float>>(width, std::make_tuple(0.0f, 0.0f, 0.0f)));
+}
+
+void ZBuffer::clear()
+{
+    for (int y = 0; y < height; ++y)
+    {
+        std::fill(buffer[y].begin(), buffer[y].end(), std::numeric_limits<float>::infinity());
+        std::fill(framebuffer[y].begin(), framebuffer[y].end(), std::make_tuple(0.0f, 0.0f, 0.0f));
+    }
+}
+
+void ZBuffer::setPixel(int x, int y, float depth, std::tuple<float, float, float> color)
+{
+    if (x >= 0 && x < width && y >= 0 && y < height && depth < buffer[y][x])
+    {
+        buffer[y][x] = depth;
+        framebuffer[y][x] = color;
+    }
+}
+
+const std::vector<std::vector<std::tuple<float, float, float>>> &ZBuffer::getFrameBuffer() const
+{
+    return framebuffer;
+}
 
 // Матрица проекции тени
 void calculateShadowMatrix(GLfloat *shadowMatrix, const GLfloat *light, const GLfloat *plane)
@@ -79,16 +126,17 @@ void drawSceneWithShadows()
     drawPyramid();
 }
 
-// Функция камеры
 void updateCamera()
 {
-    float radius = 13.0f;
-    float height = 5.0f;
+    float radius = 13.0f; // Расстояние камеры от центра
+    float height = 5.0f;  // Высота камеры
 
     glLoadIdentity();
-    gluLookAt(radius * cos(cameraAngle), height, radius * sin(cameraAngle), // Положение камеры
-              0.0, 0.0, 0.0,                                                // Точка, на которую смотрит камера
-              0.0, 1.0, 0.0);                                               // Вектор вверх
+    gluLookAt(
+        radius * cos(cameraAngle), height, radius * sin(cameraAngle), // Положение камеры
+        0.0, 0.0, 0.0,                                                // Точка, на которую смотрит камера
+        0.0, 1.0, 0.0                                                 // Вектор вверх
+    );
 }
 
 // ФУнкция движения камеры
@@ -113,11 +161,34 @@ void updateLight()
     glutPostRedisplay();
 }
 
+void renderFromZBuffer()
+{
+    glBegin(GL_POINTS);
+    for (int y = 0; y < screenHeight; ++y)
+    {
+        for (int x = 0; x < screenWidth; ++x)
+        {
+            auto [r, g, b] = zbuffer.getFrameBuffer()[y][x];
+
+            // Преобразование координат пикселя (x, y) в диапазон OpenGL (-1, 1)
+            float normalizedX = (x / float(screenWidth)) * 2.0f - 1.0f;
+            float normalizedY = 1.0f - (y / float(screenHeight)) * 2.0f;
+
+            glColor3f(r, g, b);                   // Установка цвета из кадрового буфера
+            glVertex2f(normalizedX, normalizedY); // Добавление точки на экран
+        }
+    }
+    glEnd();
+}
+
 // Функция для отображения сцены
 void display()
 {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    glEnable(GL_DEPTH_TEST);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Очистка цветного и глубинного буфера
+    zbuffer.clear();                                    // Очистка Z-буфера
+
+    // glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // glEnable(GL_DEPTH_TEST);
 
     updateCamera();
     // updateLight()
@@ -129,33 +200,15 @@ void display()
     glutSolidSphere(0.1, 16, 16);
     glPopMatrix();
 
-    // Вычисление матрицы тени
-    GLfloat groundPlane[4] = {0.0f, 1.0f, 0.0f, 0.0f};
-    GLfloat shadowMatrix[16];
-    calculateShadowMatrix(shadowMatrix, lightPos, groundPlane);
-
-    // Рисование плоскости
-    drawPlane();
-
-    // Рисование тени куба
-    glPushMatrix();
-    glMultMatrixf(shadowMatrix);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.5f); // Полупрозрачная тень
-    drawCube();
-    glPopMatrix();
-
-    // Рисование тени пирамиды
-    glPushMatrix();
-    glMultMatrixf(shadowMatrix);
-    glColor4f(0.0f, 0.0f, 0.0f, 0.5f); // Полупрозрачная тень
-    drawPyramid();
-    glPopMatrix();
-
     // Рисование объектов
+    drawPlane();
     drawCube();
     drawPyramid();
 
-    glutSwapBuffers();
+    // Отображение результата из Z-буфера
+    renderFromZBuffer();
+
+    glFlush();
 }
 
 // Функция для изменения размеров окна
@@ -199,61 +252,78 @@ void keyboard(int key, int x, int y)
 // Функция для рисования плоскости
 void drawPlane()
 {
-    glPushMatrix();
-    glColor3f(0.6f, 0.6f, 0.6f); // Цвет земли
-    glBegin(GL_QUADS);
-    glVertex3f(-5.0f, 0.0f, -5.0f);
-    glVertex3f(5.0f, 0.0f, -5.0f);
-    glVertex3f(5.0f, 0.0f, 5.0f);
-    glVertex3f(-5.0f, 0.0f, 5.0f);
-    glEnd();
-    glPopMatrix();
+    int planeSize = 500; // Размер плоскости
+    float planeY = 0.0f; // Плоскость на уровне Y=0
+
+    for (int x = -planeSize; x < planeSize; ++x)
+    {
+        for (int z = -planeSize; z < planeSize; ++z)
+        {
+            // Рассчитаем координаты пикселя в буфере
+            int screenX = x + screenWidth / 2;
+            int screenZ = z + screenHeight / 2;
+
+            // Устанавливаем пиксель в Z-буфер
+            zbuffer.setPixel(screenX, screenZ, planeY, {0.6f, 0.6f, 0.6f}); // Серый цвет плоскости
+        }
+    }
 }
 
 // Функция для рисования куба
 void drawCube()
 {
-    glPushMatrix();
-    glColor3f(0.5f, 0.2f, 0.8f); // Цвет куба
-    glTranslatef(0.0f, 0.5f, 0.0f);
-    glutSolidCube(1.0);
-    glPopMatrix();
+    int cubeSize = 50;      // Половина длины стороны куба
+    float cubeYBase = 0.0f; // Куб начинается с уровня Y=0
+
+    for (int x = -cubeSize; x < cubeSize; ++x)
+    {
+        for (int y = 0; y < cubeSize * 2; ++y)
+        {
+            for (int z = -cubeSize; z < cubeSize; ++z)
+            {
+                // Рассчитаем координаты пикселя в буфере
+                int screenX = x + screenWidth / 2;
+                int screenZ = z + screenHeight / 2;
+
+                // Глубина определяется уровнем Y
+                float depth = cubeYBase + y / float(cubeSize * 2);
+
+                // Устанавливаем пиксель в Z-буфер
+                zbuffer.setPixel(screenX, screenZ, depth, {0.5f, 0.2f, 0.8f}); // Фиолетовый цвет куба
+            }
+        }
+    }
 }
 
 // Функция для рисования пирамиды
 void drawPyramid()
 {
-    glPushMatrix();
-    glColor3f(0.2f, 0.8f, 0.4f); // Цвет пирамиды
-    glTranslatef(2.0f, 0.5f, 2.0f);
-    glBegin(GL_TRIANGLES);
-    // Основание
-    glVertex3f(-0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, 0.5f);
+    int baseSize = 50; // Половина длины основания пирамиды
+    int height = 100;  // Высота пирамиды
 
-    glVertex3f(-0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, 0.5f);
-    glVertex3f(-0.5f, 0.0f, 0.5f);
+    for (int x = -baseSize; x <= baseSize; ++x)
+    {
+        for (int z = -baseSize; z <= baseSize; ++z)
+        {
+            // Рассчитаем высоту в зависимости от расстояния до центра основания
+            int absX = std::abs(x);
+            int absZ = std::abs(z);
+            if (absX + absZ <= baseSize)
+            {
+                int y = height - (absX + absZ); // Высота уменьшается к краям
 
-    // Боковые стороны
-    glVertex3f(-0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, -0.5f);
-    glVertex3f(0.0f, 1.0f, 0.0f);
+                // Рассчитаем координаты пикселя в буфере
+                int screenX = x + screenWidth / 2;
+                int screenZ = z + screenHeight / 2;
 
-    glVertex3f(0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, 0.5f);
-    glVertex3f(0.0f, 1.0f, 0.0f);
+                // Глубина определяется уровнем Y
+                float depth = y / float(height);
 
-    glVertex3f(0.5f, 0.0f, 0.5f);
-    glVertex3f(-0.5f, 0.0f, 0.5f);
-    glVertex3f(0.0f, 1.0f, 0.0f);
-
-    glVertex3f(-0.5f, 0.0f, 0.5f);
-    glVertex3f(-0.5f, 0.0f, -0.5f);
-    glVertex3f(0.0f, 1.0f, 0.0f);
-    glEnd();
-    glPopMatrix();
+                // Устанавливаем пиксель в Z-буфер
+                zbuffer.setPixel(screenX, screenZ, depth, {0.2f, 0.8f, 0.4f}); // Зелёный цвет пирамиды
+            }
+        }
+    }
 }
 
 // Основная функция
@@ -268,6 +338,9 @@ int main(int argc, char **argv)
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Включаем тест глубины
+    glEnable(GL_DEPTH_TEST);
+
     // Инициализация GLEW
     GLenum err = glewInit();
     if (err != GLEW_OK)
@@ -277,7 +350,7 @@ int main(int argc, char **argv)
     }
 
     // Настройка OpenGL
-    glEnable(GL_DEPTH_TEST);
+    // glEnable(GL_DEPTH_TEST);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f); // Цвет фона (тёмно-серый)
 
     // Установка функций обратного вызова

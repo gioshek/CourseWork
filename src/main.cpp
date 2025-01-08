@@ -117,46 +117,42 @@ void updateLight()
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
     glEnable(GL_DEPTH_TEST);
 
     updateCamera();
-    // updateLight();
+    // updateLight()
 
-    // Задаём источник света
+    // Источник света
     glPushMatrix();
     glTranslatef(lightPos[0], lightPos[1], lightPos[2]);
-    glColor3f(1.0f, 1.0f, 0.0f);
+    glColor3f(1.0f, 1.0f, 0.0f); // Жёлтый свет
     glutSolidSphere(0.1, 16, 16);
     glPopMatrix();
 
-    // Определяем плоскость для теней
+    // Вычисление матрицы тени
     GLfloat groundPlane[4] = {0.0f, 1.0f, 0.0f, 0.0f};
     GLfloat shadowMatrix[16];
     calculateShadowMatrix(shadowMatrix, lightPos, groundPlane);
-    drawSceneWithShadows();
 
-    // Рисуем плоскость (земля)
+    // Рисование плоскости
     drawPlane();
 
-    // Отображаем тень куба
+    // Рисование тени куба
     glPushMatrix();
     glMultMatrixf(shadowMatrix);
-    glColor3f(0.2f, 0.2f, 0.2f); // Тени
+    glColor4f(0.0f, 0.0f, 0.0f, 0.5f); // Полупрозрачная тень
     drawCube();
     glPopMatrix();
 
-    // Отображаем тень пирамиды
+    // Рисование тени пирамиды
     glPushMatrix();
     glMultMatrixf(shadowMatrix);
-    glColor3f(0.2f, 0.2f, 0.2f);
+    glColor4f(0.0f, 0.0f, 0.0f, 0.5f); // Полупрозрачная тень
     drawPyramid();
     glPopMatrix();
 
-    // Рисуем куб
+    // Рисование объектов
     drawCube();
-
-    // Рисуем пирамиду
     drawPyramid();
 
     glutSwapBuffers();
@@ -268,6 +264,9 @@ int main(int argc, char **argv)
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(screenWidth, screenHeight);
     glutCreateWindow("Shadows and Z-buffering: Plane, Cube and Pyramid");
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Инициализация GLEW
     GLenum err = glewInit();

@@ -18,6 +18,8 @@ void drawPyramid();
 void drawShadow(float *lightPos, const float *groundPlane);
 void updateCamera();
 void keyboard(unsigned char key, int x, int y);
+void updateLight();
+void drawSceneWithShadows();
 
 // Z-буфер
 const int screenWidth = 1500, screenHeight = 1500;
@@ -50,6 +52,34 @@ void calculateShadowMatrix(GLfloat *shadowMatrix, const GLfloat *light, const GL
     shadowMatrix[15] = dot - light[3] * plane[3];
 }
 
+// Перекрестные тени
+void drawSceneWithShadows()
+{
+    // Определяем тени куба на пирамиде
+    GLfloat shadowMatrix[16];
+    GLfloat groundPlane[4] = {0.0f, 1.0f, 0.0f, 0.0f};
+    calculateShadowMatrix(shadowMatrix, lightPos, groundPlane);
+
+    // Отображаем тень куба
+    glPushMatrix();
+    glMultMatrixf(shadowMatrix);
+    glColor3f(0.2f, 0.2f, 0.2f); // Тень куба
+    drawCube();
+    glPopMatrix();
+
+    // Отображаем тень пирамиды
+    glPushMatrix();
+    glMultMatrixf(shadowMatrix);
+    glColor3f(0.2f, 0.2f, 0.2f); // Тень пирамиды
+    drawPyramid();
+    glPopMatrix();
+
+    // Отображение объектов
+    drawCube();
+    drawPyramid();
+}
+
+// Функция камеры
 void updateCamera()
 {
     float radius = 13.0f;
@@ -61,12 +91,25 @@ void updateCamera()
               0.0, 1.0, 0.0);                                               // Вектор вверх
 }
 
+// ФУнкция движения камеры
 void keyboard(unsigned char key, int x, int y)
 {
     if (key == 'a')
         cameraAngle -= 0.05f;
     if (key == 'd')
         cameraAngle += 0.05f;
+    glutPostRedisplay();
+}
+
+// Функиця плавного движения света
+void updateLight()
+{
+    lightAngleY += 0.5f; // Скорость движения света
+    if (lightAngleY > 360.0f)
+        lightAngleY -= 360.0f;
+
+    lightPos[0] = 5.0f * cos(lightAngleY * M_PI / 180.0f);
+    lightPos[2] = 5.0f * sin(lightAngleY * M_PI / 180.0f);
     glutPostRedisplay();
 }
 
@@ -78,6 +121,7 @@ void display()
     glEnable(GL_DEPTH_TEST);
 
     updateCamera();
+    // updateLight();
 
     // Задаём источник света
     glPushMatrix();
@@ -90,6 +134,7 @@ void display()
     GLfloat groundPlane[4] = {0.0f, 1.0f, 0.0f, 0.0f};
     GLfloat shadowMatrix[16];
     calculateShadowMatrix(shadowMatrix, lightPos, groundPlane);
+    drawSceneWithShadows();
 
     // Рисуем плоскость (земля)
     drawPlane();
@@ -180,22 +225,23 @@ void drawCube()
 }
 
 // Функция для рисования пирамиды
+// Функция для рисования пирамиды
 void drawPyramid()
 {
     glPushMatrix();
     glColor3f(0.2f, 0.8f, 0.4f); // Цвет пирамиды
     glTranslatef(2.0f, 0.5f, 2.0f);
-    glBegin(GL_TRIANGLES);
+
     // Основание
+    glBegin(GL_QUADS);
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, 0.5f);
-
-    glVertex3f(-0.5f, 0.0f, -0.5f);
-    glVertex3f(0.5f, 0.0f, 0.5f);
     glVertex3f(-0.5f, 0.0f, 0.5f);
+    glEnd();
 
     // Боковые стороны
+    glBegin(GL_TRIANGLES);
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.5f, 0.0f, -0.5f);
     glVertex3f(0.0f, 1.0f, 0.0f);
@@ -212,6 +258,7 @@ void drawPyramid()
     glVertex3f(-0.5f, 0.0f, -0.5f);
     glVertex3f(0.0f, 1.0f, 0.0f);
     glEnd();
+
     glPopMatrix();
 }
 

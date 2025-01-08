@@ -6,6 +6,7 @@
 // Параметры сцены
 float lightPos[4] = {2.0f, 4.0f, 2.0f, 1.0f}; // Позиция источника света
 float lightAngleY = 45.0f;                    // Угол движения света по оси Y
+float cameraAngle = 0.0f;
 
 // Прототипы функций
 void display();
@@ -15,9 +16,11 @@ void drawPlane();
 void drawCube();
 void drawPyramid();
 void drawShadow(float *lightPos, const float *groundPlane);
+void updateCamera();
+void keyboard(unsigned char key, int x, int y);
 
 // Z-буфер
-const int screenWidth = 800, screenHeight = 800;
+const int screenWidth = 1500, screenHeight = 1500;
 
 // Матрица проекции тени
 void calculateShadowMatrix(GLfloat *shadowMatrix, const GLfloat *light, const GLfloat *plane)
@@ -47,12 +50,34 @@ void calculateShadowMatrix(GLfloat *shadowMatrix, const GLfloat *light, const GL
     shadowMatrix[15] = dot - light[3] * plane[3];
 }
 
+void updateCamera()
+{
+    float radius = 13.0f;
+    float height = 5.0f;
+
+    glLoadIdentity();
+    gluLookAt(radius * cos(cameraAngle), height, radius * sin(cameraAngle), // Положение камеры
+              0.0, 0.0, 0.0,                                                // Точка, на которую смотрит камера
+              0.0, 1.0, 0.0);                                               // Вектор вверх
+}
+
+void keyboard(unsigned char key, int x, int y)
+{
+    if (key == 'a')
+        cameraAngle -= 0.05f;
+    if (key == 'd')
+        cameraAngle += 0.05f;
+    glutPostRedisplay();
+}
+
 // Функция для отображения сцены
 void display()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glEnable(GL_DEPTH_TEST);
+
+    updateCamera();
 
     // Задаём источник света
     glPushMatrix();
@@ -114,6 +139,14 @@ void keyboard(int key, int x, int y)
     else if (key == GLUT_KEY_RIGHT)
     {
         lightAngleY += 5.0f;
+    }
+    else if (key == 'a')
+    {
+        cameraAngle -= 5.0f;
+    }
+    else if (key == 'd')
+    {
+        cameraAngle += 5.0f;
     }
 
     lightPos[0] = 5.0f * cos(lightAngleY * M_PI / 180.0f);
@@ -189,7 +222,7 @@ int main(int argc, char **argv)
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
     glutInitWindowSize(screenWidth, screenHeight);
-    glutCreateWindow("Тени и Z-буферизация: плоскость, куб и пирамида");
+    glutCreateWindow("Shadows and Z-buffering: Plane, Cube and Pyramid");
 
     // Инициализация GLEW
     GLenum err = glewInit();
@@ -206,7 +239,8 @@ int main(int argc, char **argv)
     // Установка функций обратного вызова
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
-    glutSpecialFunc(keyboard); // Управление клавишами (стрелками)
+    glutSpecialFunc(keyboard);  // Управление клавишами (стрелками)
+    glutKeyboardFunc(keyboard); // Управление клавишами (a и d)
 
     // Запуск основного цикла GLUT
     glutMainLoop();
